@@ -26,6 +26,7 @@ workflow IGV_all_samples {
         String sv_base_mini_docker
         String igv_docker
         String variant_interpretation_docker
+        String rename_crams_script
         RuntimeAttr? runtime_attr_update_scc
         RuntimeAttr? runtime_attr_run_igv
         RuntimeAttr? runtime_attr_igv
@@ -73,6 +74,7 @@ workflow IGV_all_samples {
                 crais_files = generate_per_family_sample_crai_cram.per_family_crais_strings,
                 crams_files = generate_per_family_sample_crai_cram.per_family_crams_strings,
                 variant_interpretation_docker = variant_interpretation_docker,
+                rename_crams_script=rename_crams_script,
                 runtime_attr_override = runtime_attr_update_scc
         }
 
@@ -248,6 +250,7 @@ task update_sample_crai_cram{
         File sample_crai_cram
         Array[String] crams_files
         Array[String] crais_files
+        String rename_crams_script
         String variant_interpretation_docker
         RuntimeAttr? runtime_attr_override
     }
@@ -268,7 +271,7 @@ task update_sample_crai_cram{
     command <<<
         head -n+1 ~{ped_file} > family_ped.txt
         grep -w ^~{family} ~{ped_file} >> family_ped.txt
-        python3.9 /src/variant-interpretation/scripts/renameCrams.py --ped family_ped.txt --scc ~{sample_crai_cram}
+        python3.9 ~{rename_crams_script} --ped family_ped.txt --scc ~{sample_crai_cram}
         cut -f1 changed_sample_crai_cram.txt > samples.txt
         cut -f5 changed_sample_crai_cram.txt > crai.txt
         cut -f4 changed_sample_crai_cram.txt > cram.txt

@@ -13,6 +13,7 @@ workflow RdTestVisualization{
         File outlier_samples
         File batch_bincov
         File bed
+        File regeno
         String sv_pipeline_rdtest_docker
         String variant_interpretation_docker
         RuntimeAttr? runtime_attr_rdtest

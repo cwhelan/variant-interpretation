@@ -23,6 +23,7 @@ workflow IGV {
         Int igv_max_window
         String buffer
         String igv_docker
+        String rename_crams_localize_script
         String variant_interpretation_docker
         RuntimeAttr? runtime_attr_igv
         RuntimeAttr? runtime_attr_localize_reads
@@ -63,6 +64,7 @@ workflow IGV {
                 reference = reference,
                 reference_index = reference_index,
                 igv_docker = igv_docker,
+                rename_crams_localize_script = rename_crams_localize_script,
                 runtime_attr_override = runtime_attr_igv
         }
     }
@@ -106,6 +108,7 @@ task runIGV_whole_genome_localize{
             File sample_crai_cram
             String buffer
             String igv_docker
+            String rename_crams_localize_script
             RuntimeAttr? runtime_attr_override
         }
 
@@ -128,7 +131,9 @@ task runIGV_whole_genome_localize{
             mkdir pe_igv_plots
             head -n+1 ~{ped_file} > family_ped.txt
             grep -w ~{family} ~{ped_file} >> family_ped.txt
-            python3.6 /src/renameCramsLocalize.py --ped family_ped.txt --scc ~{sample_crai_cram}
+
+            curl ~{rename_crams_localize_script} > renameCramsLocalize.py
+            python3.6 renameCramsLocalize.py --ped family_ped.txt --scc ~{sample_crai_cram}
             cut -f4 changed_sample_crai_cram.txt > crams.txt
             
             while read sample crai cram new_cram new_crai

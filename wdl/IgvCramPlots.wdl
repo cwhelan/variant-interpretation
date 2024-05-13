@@ -140,13 +140,13 @@ task runIGV_whole_genome_localize{
             #     mv $cram $new_cram
             #     mv $crai $new_crai
             # done<changed_sample_crai_cram.txt
+            curl ~{make_igv_pesr_script} > makeigvpesr.py
 
             i=0
             while read -r line
             do
                 let "i=$i+1"
                 echo "$line" > new.varfile.$i.bed
-                curl ~{make_igv_pesr_script} > makeigvpesr.py
                 python makeigvpesr.py -v new.varfile.$i.bed -fam_id ~{family} -samples ~{sep="," samples} -crams ~{write_lines(crams)} -p ~{ped_file} -o pe_igv_plots -b ~{buffer}  -i pe.$i.txt -bam pe.$i.sh
                 bash pe.$i.sh
                 xvfb-run --server-args="-screen 0, 1920x540x24" bash /IGV_Linux_2.16.0/igv.sh -b pe.$i.txt

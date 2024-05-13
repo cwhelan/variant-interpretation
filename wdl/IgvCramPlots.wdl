@@ -23,7 +23,7 @@ workflow IGV {
         Int igv_max_window
         String buffer
         String igv_docker
-        String rename_crams_localize_script
+        String make_igv_pesr_script
         String variant_interpretation_docker
         RuntimeAttr? runtime_attr_igv
         RuntimeAttr? runtime_attr_localize_reads
@@ -64,7 +64,7 @@ workflow IGV {
                 reference = reference,
                 reference_index = reference_index,
                 igv_docker = igv_docker,
-                rename_crams_localize_script = rename_crams_localize_script,
+                make_igv_pesr_script = make_igv_pesr_script,
                 runtime_attr_override = runtime_attr_igv
         }
     }
@@ -108,7 +108,7 @@ task runIGV_whole_genome_localize{
             File sample_crai_cram
             String buffer
             String igv_docker
-            String rename_crams_localize_script
+            String make_igv_pesr_script
             RuntimeAttr? runtime_attr_override
         }
 
@@ -132,7 +132,6 @@ task runIGV_whole_genome_localize{
             head -n+1 ~{ped_file} > family_ped.txt
             grep -w ~{family} ~{ped_file} >> family_ped.txt
 
-            # curl ~{rename_crams_localize_script} > renameCramsLocalize.py
             # python3.6 renameCramsLocalize.py --ped family_ped.txt --scc ~{sample_crai_cram}
             # cut -f4 changed_sample_crai_cram.txt > crams.txt
             
@@ -147,7 +146,8 @@ task runIGV_whole_genome_localize{
             do
                 let "i=$i+1"
                 echo "$line" > new.varfile.$i.bed
-                python /src/variant-interpretation/scripts/makeigvpesr.py -v new.varfile.$i.bed -fam_id ~{family} -samples ~{sep="," samples} -crams ~{write_lines(crams)} -p ~{ped_file} -o pe_igv_plots -b ~{buffer}  -i pe.$i.txt -bam pe.$i.sh
+                curl ~{make_igv_pesr_script} > makeigvpesr.py
+                python makeigvpesr.py -v new.varfile.$i.bed -fam_id ~{family} -samples ~{sep="," samples} -crams ~{write_lines(crams)} -p ~{ped_file} -o pe_igv_plots -b ~{buffer}  -i pe.$i.txt -bam pe.$i.sh
                 bash pe.$i.sh
                 xvfb-run --server-args="-screen 0, 1920x540x24" bash /IGV_Linux_2.16.0/igv.sh -b pe.$i.txt
             done < ~{varfile}

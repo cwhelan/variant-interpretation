@@ -64,6 +64,7 @@ workflow IGV {
                 reference = reference,
                 reference_index = reference_index,
                 igv_docker = igv_docker,
+                igv_max_window = igv_max_window, 
                 make_igv_pesr_script = make_igv_pesr_script,
                 runtime_attr_override = runtime_attr_igv
         }
@@ -106,6 +107,7 @@ task runIGV_whole_genome_localize{
             Array[File] crams
             Array[File] crais
             File sample_crai_cram
+            Int igv_max_window
             String buffer
             String igv_docker
             String make_igv_pesr_script
@@ -147,7 +149,7 @@ task runIGV_whole_genome_localize{
             do
                 let "i=$i+1"
                 echo "$line" > new.varfile.$i.bed
-                python makeigvpesr.py -v new.varfile.$i.bed -fam_id ~{family} -samples ~{sep="," samples} -crams ~{write_lines(crams)} -p ~{ped_file} -o pe_igv_plots -b ~{buffer}  -i pe.$i.txt -bam pe.$i.sh
+                python makeigvpesr.py -v new.varfile.$i.bed -fam_id ~{family} -samples ~{sep="," samples} -crams ~{write_lines(crams)} -p ~{ped_file} -o pe_igv_plots -b ~{buffer}  -i pe.$i.txt -bam pe.$i.sh -m ~{igv_max_window}
                 bash pe.$i.sh
                 xvfb-run --server-args="-screen 0, 1920x540x24" bash /IGV_Linux_2.16.0/igv.sh -b pe.$i.txt
             done < ~{varfile}

@@ -46,8 +46,8 @@ task removeDuplicatesVCF {
   command {
     set -e
 
-    bcftools norm -D ~{input_vcf} | \
-      bcftools norm -m +any - | \
+    bcftools norm -d some ~{input_vcf} | \
+      bcftools norm -m +any | \
       bcftools sort -O z -o ~{sample_id}.readgroupadded.uniq.g.vcf.gz
 
     tabix -p vcf ~{sample_id}.readgroupadded.uniq.g.vcf.gz

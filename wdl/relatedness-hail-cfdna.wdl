@@ -28,7 +28,6 @@ workflow Relatedness {
         String bucket_id
         String genome_build
         Int chunk_size=0
-        Boolean sort_after_merge=false
         RuntimeAttr? runtime_attr_subset_vcfs
         RuntimeAttr? runtime_attr_merge_vcfs
         RuntimeAttr? runtime_attr_check_relatedness

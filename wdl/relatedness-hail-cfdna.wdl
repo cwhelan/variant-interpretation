@@ -49,7 +49,6 @@ workflow Relatedness {
             input:
                 bed_file=bed_file,
                 vcf_uri=vcf_uri,
-                vcf_idx=vcf_uri+'.tbi',
                 output_name=prefix + '.somalier.subset.vcf.gz',
                 sv_base_mini_docker=sv_base_mini_docker,
                 runtime_attr_override=runtime_attr_subset_vcfs

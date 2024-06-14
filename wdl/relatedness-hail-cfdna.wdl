@@ -62,7 +62,6 @@ workflow Relatedness {
             vcf_files=subsetVCFs.subset_vcf,
             sv_base_mini_docker=sv_base_mini_docker,
             merged_filename=cohort_prefix,
-            sort_after_merge=sort_after_merge,
             runtime_attr_override=runtime_attr_merge_vcfs
     }
 

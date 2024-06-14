@@ -834,7 +834,7 @@ task mergeHTs {
 task subsetVCFs {
     input {
         File vcf_uri
-        File vcf_idx
+        File? vcf_idx
         File bed_file
         String output_name
         String sv_base_mini_docker
@@ -863,6 +863,7 @@ task subsetVCFs {
     }
 
     command {
+        bcftools index -t ~{vcf_uri}
         bcftools view -R ~{bed_file} ~{vcf_uri} -o ~{output_name}
         bcftools index -t ~{output_name}
     }

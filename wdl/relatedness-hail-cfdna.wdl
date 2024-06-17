@@ -34,7 +34,16 @@ workflow Relatedness {
         RuntimeAttr? runtime_attr_plot_relatedness
     }
 
-    Array[File] all_vcfs = select_all(flatten([cfdna_vcfs, maternal_vcfs, confirmation_vcfs]))
+    Array[File] all_cfdna_vcfs = select_all(cfdna_vcfs)
+    scatter(cfdna_vcf in all_cfdna_vcfs) {
+        call RemoveRawMutectCalls {
+            input:
+                vcf = cfdna_vcf,
+                sv_base_mini_docker = sv_base_mini_docker
+        }
+    }
+
+    Array[File] all_vcfs = select_all(flatten([RemoveRawMutectCalls.out, maternal_vcfs, confirmation_vcfs]))
 
     call DedupVcfs {
         input:
@@ -133,6 +142,50 @@ task DedupVcfs {
 
     output {
         Array[File] vcfs = read_lines("vcf.dedup.list")
+    }
+}
+
+task RemoveRawMutectCalls {
+    input {
+        File vcf
+        String sv_base_mini_docker
+    }
+
+    RuntimeAttr runtime_default = object {
+                                      mem_gb: 3,
+                                      disk_gb: 10,
+                                      cpu_cores: 1,
+                                      preemptible_tries: 3,
+                                      max_retries: 1,
+                                      boot_disk_gb: 10
+                                  }
+
+    RuntimeAttr runtime_override = runtime_default
+    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+
+    String prefix = basename(vcf, ".vcf.gz")
+
+    runtime {
+        memory: "~{memory} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: cpu_cores
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: sv_base_mini_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+        set -eou pipefail
+        # mutect calls are the first sample
+        bcftools query -l ~{vcf} | awk 'NR > 1' > samples.txt
+        bcftools view ~{vcf} -S samples.txt -o ~{prefix}.fm.vcf.gz
+
+    >>>
+
+    output {
+        File out = "~{prefix}.fm.vcf.gz"
     }
 }
 

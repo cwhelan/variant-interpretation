@@ -73,12 +73,13 @@ task mergeVCFSamples {
         cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
         for vcf in $(cat vcfs_sorted.list);
         do
-            bcftools annotate -x ^FORMAT/GT,FORMAT/AD,FORMAT/DP,FORMAT/GQ,FORMAT/PL -Oz -o "$vcf"_stripped.vcf.gz $vcf
+            bcftools annotate -x ^FORMAT/GT,FORMAT/AD,FORMAT/DP,FORMAT/GQ,FORMAT/PL -Ou $vcf | \
+                bcftools norm -m- $vcf -oz -o "$vcf"_stripped.vcf.gz
             tabix "$vcf"_stripped.vcf.gz
             echo "$vcf"_stripped.vcf.gz >> vcfs_sorted_stripped.list
         done
         bcftools merge -m none --force-samples --no-version -Oz --file-list vcfs_sorted_stripped.list --output ~{merged_filename}_merged.vcf.gz
-            >>>
+    >>>
 
     output {
         File merged_vcf_file = "~{merged_filename}_merged.vcf.gz"

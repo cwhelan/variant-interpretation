@@ -80,9 +80,16 @@ workflow vepAnnotateHail {
                     cohort_prefix=basename(chunk_file),
                     runtime_attr_override=runtime_attr_merge_vcfs
             }
+            
+            call RemoveRawMutectCalls as RemoveRawMutectCallsMergedShards {
+                input:
+                vcf=mergeVCFs.merged_vcf_file,
+                sv_base_mini_docker=sv_base_mini_docker
+            }
+
             call vepAnnotate as vepAnnotateMergedShards {
                 input:
-                    vcf_file=mergeVCFs.merged_vcf_file,
+                    vcf_file=RemoveRawMutectCallsMergedShards.out,
                     vep_annotate_hail_python_script=vep_annotate_hail_python_script,
                     top_level_fa=top_level_fa,
                     # human_ancestor_fa=human_ancestor_fa,
@@ -118,9 +125,15 @@ workflow vepAnnotateHail {
         Array[File] vcf_shards_ = select_first([scatterVCF.vcf_shards, vcf_shards])
     
         scatter (vcf_shard in vcf_shards_) {
+            call RemoveRawMutectCalls {
+                input:
+                vcf=vcf_shard,
+                sv_base_mini_docker=sv_base_mini_docker
+            }
+
             call vepAnnotate {
                 input:
-                    vcf_file=vcf_shard,
+                    vcf_file=RemoveRawMutectCalls.out,
                     vep_annotate_hail_python_script=vep_annotate_hail_python_script,
                     top_level_fa=top_level_fa,
                     # human_ancestor_fa=human_ancestor_fa,
@@ -147,6 +160,50 @@ workflow vepAnnotateHail {
         Array[File] vep_vcf_idx = vep_vcf_idx_
     }
 }   
+
+task RemoveRawMutectCalls {
+    input {
+        File vcf
+        String sv_base_mini_docker
+    }
+
+    RuntimeAttr runtime_default = object {
+                                      mem_gb: 3,
+                                      disk_gb: 10,
+                                      cpu_cores: 1,
+                                      preemptible_tries: 3,
+                                      max_retries: 1,
+                                      boot_disk_gb: 10
+                                  }
+
+    RuntimeAttr runtime_override = runtime_default
+    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+
+    String prefix = basename(vcf, ".vcf.gz")
+
+    runtime {
+        memory: "~{memory} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: cpu_cores
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: sv_base_mini_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+        set -eou pipefail
+        # mutect calls are the first sample
+        bcftools query -l ~{vcf} | awk 'NR > 1' > samples.txt
+        bcftools view ~{vcf} -S samples.txt -o ~{prefix}.fm.vcf.gz
+
+    >>>
+
+    output {
+        File out = "~{prefix}.fm.vcf.gz"
+    }
+}
 
 task vepAnnotate {
     input {

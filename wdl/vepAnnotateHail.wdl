@@ -196,7 +196,7 @@ task RemoveRawMutectCalls {
         set -eou pipefail
         # mutect calls are the first sample
         bcftools query -l ~{vcf} | awk 'NR > 1' > samples.txt
-        bcftools view ~{vcf} -S samples.txt -o ~{prefix}.fm.vcf.gz
+        bcftools view ~{vcf} -S samples.txt -Oz -o ~{prefix}.fm.vcf.gz
 
     >>>
 
@@ -287,7 +287,6 @@ task vepAnnotate {
         }' > vep_config.json
 
         curl ~{vep_annotate_hail_python_script} > vep_annotate.py
-        proj_id=$(gcloud config get-value project)
         python3.9 vep_annotate.py -i ~{vcf_file} -o ~{vep_annotated_vcf_name} --cores ~{cpu_cores} --mem ~{memory} \
         --reannotate-ac-af ~{reannotate_ac_af} --build ~{genome_build} --project-id $proj_id
         cp $(ls . | grep hail*.log) hail_log.txt

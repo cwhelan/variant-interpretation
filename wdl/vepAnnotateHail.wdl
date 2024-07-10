@@ -105,6 +105,14 @@ workflow vepAnnotateHail {
                     genome_build=genome_build,
                     runtime_attr_override=runtime_attr_vep_annotate
             }
+
+            call addHGVScGeneSymbolField as addHGVScGeneSymbolFieldMergedShards {
+                input:
+                vcf_file=vepAnnotateMergedShards.vep_vcf_file,
+                genome_build=genome_build,
+                vep_hail_docker=vep_hail_docker,
+                runtime_attr_override=runtime_attr_vep_annotate
+            }
         }
     }
 
@@ -149,11 +157,19 @@ workflow vepAnnotateHail {
                     genome_build=genome_build,
                     runtime_attr_override=runtime_attr_vep_annotate
             }
+
+            call addHGVScGeneSymbolField {
+                input:
+                    vcf_file=vepAnnotate.vep_vcf_file,
+                    genome_build=genome_build,
+                    vep_hail_docker=vep_hail_docker,
+                    runtime_attr_override=runtime_attr_vep_annotate
+            }
         }
     }
 
-    Array[File] vep_vcf_files_ = select_first([vepAnnotate.vep_vcf_file, vepAnnotateMergedShards.vep_vcf_file])
-    Array[File] vep_vcf_idx_ = select_first([vepAnnotate.vep_vcf_idx, vepAnnotateMergedShards.vep_vcf_idx])
+    Array[File] vep_vcf_files_ = select_first([addHGVScGeneSymbolFieldMergedShards.output_vcf, addHGVScGeneSymbolField.output_vcf])
+    Array[File] vep_vcf_idx_ = select_first([addHGVScGeneSymbolFieldMergedShards.output_vcf_idx, addHGVScGeneSymbolField.output_vcf_idx])
 
     output {
         Array[File] vep_vcf_files = vep_vcf_files_
@@ -298,5 +314,115 @@ task vepAnnotate {
         File vep_vcf_file = vep_annotated_vcf_name
         File vep_vcf_idx = vep_annotated_vcf_name + '.tbi'
         File hail_log = "hail_log.txt"
+    }
+}
+
+task addHGVScGeneSymbolField {
+    input {
+        File vcf_file
+        String genome_build
+        String vep_hail_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    Float input_size = size(vcf_file, "GB")
+    Float base_disk_gb = 10.0
+    Float input_disk_scale = 10.0
+    RuntimeAttr runtime_default = object {
+        mem_gb: 8,
+        disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+        cpu_cores: 1,
+        preemptible_tries: 3,
+        max_retries: 1,
+        boot_disk_gb: 10
+    }
+
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    
+    runtime {
+        memory: "~{memory} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: cpu_cores
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: vep_hail_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    String output_filename = basename(vcf_file, '.vcf.bgz') + '_HGVSc_symbol.vcf.bgz'
+
+    command <<<
+        set -euo pipefail
+
+        cat <<EOF > add_hgvsc.py
+        import hail as hl
+        import os
+        import sys
+
+        vcf_file = sys.argv[1]
+        build = sys.argv[2]
+        output_filename = sys.argv[3]
+
+        hl.init()
+
+        mt = hl.import_vcf(vcf_file, reference_genome=build, force_bgz=True)
+
+        header = hl.get_vcf_metadata(vcf_file)
+        csq_columns = header['info']['CSQ']['Description'].split('Format: ')[1].split('|')
+
+        mt = mt.annotate_rows(vep=mt.info)
+        transcript_consequences = mt.vep.CSQ.map(lambda x: x.split('\|'))
+
+        transcript_consequences_strs = transcript_consequences.map(lambda x: hl.if_else(hl.len(x)>1, hl.struct(**
+                                                               {col: x[i] if col!='Consequence' else x[i].split('&')  
+                                                                for i, col in enumerate(csq_columns)}), 
+                                                                hl.struct(**{col: hl.missing('str') if col!='Consequence' else hl.array([hl.missing('str')])  
+                                                                for i, col in enumerate(csq_columns)})))
+
+        mt = mt.annotate_rows(vep=mt.vep.annotate(transcript_consequences=transcript_consequences_strs))
+        mt = mt.annotate_rows(vep=mt.vep.select('transcript_consequences'))
+
+        mt_by_gene = mt.explode_rows(mt.vep.transcript_consequences)
+
+        mt_by_gene = mt_by_gene.annotate_rows(vep=mt_by_gene.vep.annotate(
+            transcript_consequences=mt_by_gene.vep.transcript_consequences.annotate(
+                HGVSc_symbol= hl.str(', ').join(
+                            hl.array([mt_by_gene.vep.transcript_consequences.SYMBOL, 
+                                     hl.if_else(mt_by_gene.vep.transcript_consequences.HGVSc!='', mt_by_gene.vep.transcript_consequences.HGVSc.split(':')[1], hl.missing('str')),
+                                     hl.if_else(mt_by_gene.vep.transcript_consequences.HGVSp!='', mt_by_gene.vep.transcript_consequences.HGVSp.split(':')[1], hl.missing('str'))])
+            .filter(lambda x: hl.is_defined(x))
+                                        ))))
+
+        csq_fields_str = '|'.join(csq_columns + ['HGVSc_symbol'])
+
+        mt_by_gene = (mt_by_gene.group_rows_by(mt_by_gene.locus, mt_by_gene.alleles)
+            .aggregate_rows(vep = hl.agg.collect(mt_by_gene.vep))).result()
+
+        fields = list(mt_by_gene.vep.transcript_consequences[0])
+        new_csq = mt_by_gene.vep.transcript_consequences.scan(lambda i, j: 
+                                              hl.str('|').join(hl.array([i]))
+                                              +','+hl.str('|').join(hl.array([j[col] if col!='Consequence' else 
+                                                                          hl.str('&').join(j[col]) 
+                                                                          for col in list(fields)])), '')[-1][1:]
+        mt_by_gene = mt_by_gene.annotate_rows(CSQ=new_csq)
+
+        mt = mt.annotate_rows(info=mt.info.annotate(CSQ=mt_by_gene.rows()[mt.row_key].CSQ))
+        mt = mt.drop('vep')
+
+        header['info']['CSQ'] = {'Description': csq_fields_str, 'Number': '.', 'Type': 'String'}
+
+        hl.export_vcf(dataset=mt, output=output_filename, metadata=header)
+        EOF
+
+        python3.9 add_hgvsc.py ~{vcf_file} ~{genome_build} ~{output_filename}
+
+        /opt/vep/bcftools/bcftools index -t ~{output_filename}
+    >>>
+
+    output {
+        File output_vcf = output_filename
+        File output_vcf_idx = output_filename + '.tbi'
     }
 }

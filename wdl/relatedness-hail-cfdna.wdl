@@ -23,13 +23,16 @@ workflow Relatedness {
         String cohort_prefix
         String relatedness_qc_script
         String plot_relatedness_script
+        String sex_qc_script
         String sv_base_mini_docker
         String hail_docker
         String bucket_id
         String genome_build
         Int chunk_size=0
+        Boolean sort_after_merge=false
         RuntimeAttr? runtime_attr_subset_vcfs
         RuntimeAttr? runtime_attr_merge_vcfs
+        RuntimeAttr? runtime_attr_impute_sex
         RuntimeAttr? runtime_attr_check_relatedness
         RuntimeAttr? runtime_attr_plot_relatedness
     }
@@ -239,7 +242,7 @@ task checkRelatedness {
 
     output {
         File relatedness_qc = cohort_prefix + "_relatedness_qc.ped"
-        File kinship_tsv = cohort_prefix + "_kinship.tsv"
+        File kinship_tsv = cohort_prefix + "_kinship.tsv.gz"
     }
 }
 

@@ -20,6 +20,7 @@ workflow Relatedness {
         File ped_uri
         File sites_uri
         File bed_file
+        File gnomad_af_resource
         String cohort_prefix
         String relatedness_qc_script
         String plot_relatedness_script
@@ -91,6 +92,17 @@ workflow Relatedness {
         runtime_attr_override=runtime_attr_check_relatedness
     }
 
+    call checkRelatednessRareAlleles {
+        input:
+            vcf_uri=merged_vcf_file,
+            cohort_prefix=cohort_prefix,
+            gnomad_af_resource=gnomad_af_resource,
+            hail_docker=hail_docker,
+            bucket_id=bucket_id,
+            genome_build=genome_build,
+            runtime_attr_override=runtime_attr_check_relatedness
+    }
+
     call plotRelatedness {
         input:
         kinship_tsv=checkRelatedness.kinship_tsv,
@@ -106,6 +118,7 @@ workflow Relatedness {
         File relatedness_qc = checkRelatedness.relatedness_qc
         File kinship_tsv = checkRelatedness.kinship_tsv
         File relatedness_plot = plotRelatedness.relatedness_plot
+        File ra_sharing_tsv = checkRelatednessRareAlleles.ra_sharing_tsv
     }
 }
 
@@ -243,6 +256,124 @@ task checkRelatedness {
     output {
         File relatedness_qc = cohort_prefix + "_relatedness_qc.ped"
         File kinship_tsv = cohort_prefix + "_kinship.tsv.gz"
+    }
+}
+
+task checkRelatednessRareAlleles {
+    input {
+        File vcf_uri
+        File gnomad_af_resource
+        String cohort_prefix
+        String hail_docker
+        String bucket_id
+        String genome_build
+        RuntimeAttr? runtime_attr_override
+    }
+
+    Float input_size = size(vcf_uri, "GB")
+    Float base_disk_gb = 10.0
+    Float input_disk_scale = 10.0
+
+    RuntimeAttr runtime_default = object {
+                                      mem_gb: 4,
+                                      disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+                                      cpu_cores: 1,
+                                      preemptible_tries: 3,
+                                      max_retries: 1,
+                                      boot_disk_gb: 10
+                                  }
+
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+
+    runtime {
+        memory: "~{memory} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: cpu_cores
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: hail_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+        set -eou pipefail
+
+        bcftools annotate -a ~{gnomad_af_resource} -c GAF:=AF_popmax -o vcf_annotated_gaf.vcf.gz ~{vcf_uri}
+        tabix vcf_annotated_gaf.vcf.gz
+
+        python3 <<CODE
+import numpy as np
+import pysam
+from itertools import combinations
+
+def compute_rare_allele_sharing(vcf_filename, maf_threshold=0.01):
+    # Open the VCF file
+    vcf = pysam.VariantFile(vcf_filename)
+
+    # Get list of samples
+    samples = list(vcf.header.samples)
+    n_individuals = len(samples)
+
+    # Initialize counters for rare alleles
+    rare_allele_counts = np.zeros(n_individuals)
+    shared_rare_counts = np.zeros((n_individuals, n_individuals))
+
+    # Iterate through variants in the VCF
+    for variant in vcf:
+        # Check if GAF is present and below threshold
+        if 'GAF' in variant.info:
+            gaf = variant.info['GAF'][0]  # Assuming GAF is a single value
+            if gaf < maf_threshold and gaf > 0:
+                # This is a rare variant, process it
+                genotypes = [sum(sample.values()) > 0 for sample in variant.samples.values()]
+
+                for i, has_allele in enumerate(genotypes):
+                    if has_allele:
+                        rare_allele_counts[i] += 1
+                        for j in range(i+1, n_individuals):
+                            if genotypes[j]:
+                                shared_rare_counts[i, j] += 1
+                                shared_rare_counts[j, i] += 1
+
+    # Compute pairwise metrics
+    results = []
+    for (i, j) in combinations(range(n_individuals), 2):
+        shared = shared_rare_counts[i, j]
+        total_i = rare_allele_counts[i]
+        total_j = rare_allele_counts[j]
+
+        prop_a_shared = shared / total_i if total_i > 0 else 0
+        prop_b_shared = shared / total_j if total_j > 0 else 0
+        jaccard = shared / (total_i + total_j - shared) if (total_i + total_j - shared) > 0 else 0
+
+        results.append((
+            samples[i], samples[j],
+            prop_a_shared, prop_b_shared, jaccard,
+            int(total_i), int(total_j)  # Convert to int for cleaner output
+        ))
+
+    return results
+
+# Example usage
+vcf_filename = "vcf_annotated_gaf.vcf.gz"
+sharing_results = compute_rare_allele_sharing(vcf_filename)
+
+# Write results to TSV file
+output_filename = "~{cohort_prefix}_rare_allele_sharing_results.tsv"
+with open(output_filename, "w") as f:
+    f.write("Sample_A\tSample_B\tProp_A_Shared\tProp_B_Shared\tJaccard_Index\tTotal_Rare_A\tTotal_Rare_B\n")
+    for result in sharing_results:
+        f.write("\t".join(map(str, result)) + "\n")
+
+print(f"Results written to {output_filename}")
+        CODE
+
+    >>>
+
+    output {
+        File ra_sharing_tsv = cohort_prefix + "_rare_allele_sharing_results.tsv"
     }
 }
 

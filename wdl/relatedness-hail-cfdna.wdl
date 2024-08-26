@@ -21,6 +21,7 @@ workflow Relatedness {
         File sites_uri
         File bed_file
         File gnomad_af_resource
+        File gnomad_af_resource_idx
         String cohort_prefix
         String relatedness_qc_script
         String plot_relatedness_script
@@ -97,6 +98,7 @@ workflow Relatedness {
             vcf_uri=merged_vcf_file,
             cohort_prefix=cohort_prefix,
             gnomad_af_resource=gnomad_af_resource,
+            gnomad_af_resource_idx=gnomad_af_resource_idx,
             hail_docker=hail_docker,
             bucket_id=bucket_id,
             genome_build=genome_build,
@@ -263,6 +265,7 @@ task checkRelatednessRareAlleles {
     input {
         File vcf_uri
         File gnomad_af_resource
+        File gnomad_af_resource_idx
         String cohort_prefix
         String hail_docker
         String bucket_id

@@ -307,70 +307,70 @@ task checkRelatednessRareAlleles {
         tabix vcf_annotated_gaf.vcf.gz
 
         python3 <<CODE
-import numpy as np
-import pysam
-from itertools import combinations
+        import numpy as np
+        import pysam
+        from itertools import combinations
 
-def compute_rare_allele_sharing(vcf_filename, maf_threshold=0.01):
-    # Open the VCF file
-    vcf = pysam.VariantFile(vcf_filename)
+        def compute_rare_allele_sharing(vcf_filename, maf_threshold=0.01):
+            # Open the VCF file
+            vcf = pysam.VariantFile(vcf_filename)
 
-    # Get list of samples
-    samples = list(vcf.header.samples)
-    n_individuals = len(samples)
+            # Get list of samples
+            samples = list(vcf.header.samples)
+            n_individuals = len(samples)
 
-    # Initialize counters for rare alleles
-    rare_allele_counts = np.zeros(n_individuals)
-    shared_rare_counts = np.zeros((n_individuals, n_individuals))
+            # Initialize counters for rare alleles
+            rare_allele_counts = np.zeros(n_individuals)
+            shared_rare_counts = np.zeros((n_individuals, n_individuals))
 
-    # Iterate through variants in the VCF
-    for variant in vcf:
-        # Check if GAF is present and below threshold
-        if 'GAF' in variant.info:
-            gaf = variant.info['GAF'][0]  # Assuming GAF is a single value
-            if gaf < maf_threshold and gaf > 0:
-                # This is a rare variant, process it
-                genotypes = [sum(sample.values()) > 0 for sample in variant.samples.values()]
+            # Iterate through variants in the VCF
+            for variant in vcf:
+                # Check if GAF is present and below threshold
+                if 'GAF' in variant.info:
+                    gaf = variant.info['GAF'][0]  # Assuming GAF is a single value
+                    if gaf < maf_threshold and gaf > 0:
+                        # This is a rare variant, process it
+                        genotypes = [sum(sample.values()) > 0 for sample in variant.samples.values()]
 
-                for i, has_allele in enumerate(genotypes):
-                    if has_allele:
-                        rare_allele_counts[i] += 1
-                        for j in range(i+1, n_individuals):
-                            if genotypes[j]:
-                                shared_rare_counts[i, j] += 1
-                                shared_rare_counts[j, i] += 1
+                        for i, has_allele in enumerate(genotypes):
+                            if has_allele:
+                                rare_allele_counts[i] += 1
+                                for j in range(i+1, n_individuals):
+                                    if genotypes[j]:
+                                        shared_rare_counts[i, j] += 1
+                                        shared_rare_counts[j, i] += 1
 
-    # Compute pairwise metrics
-    results = []
-    for (i, j) in combinations(range(n_individuals), 2):
-        shared = shared_rare_counts[i, j]
-        total_i = rare_allele_counts[i]
-        total_j = rare_allele_counts[j]
+            # Compute pairwise metrics
+            results = []
+            for (i, j) in combinations(range(n_individuals), 2):
+                shared = shared_rare_counts[i, j]
+                total_i = rare_allele_counts[i]
+                total_j = rare_allele_counts[j]
 
-        prop_a_shared = shared / total_i if total_i > 0 else 0
-        prop_b_shared = shared / total_j if total_j > 0 else 0
-        jaccard = shared / (total_i + total_j - shared) if (total_i + total_j - shared) > 0 else 0
+                prop_a_shared = shared / total_i if total_i > 0 else 0
+                prop_b_shared = shared / total_j if total_j > 0 else 0
+                jaccard = shared / (total_i + total_j - shared) if (total_i + total_j - shared) > 0 else 0
 
-        results.append((
-            samples[i], samples[j],
-            prop_a_shared, prop_b_shared, jaccard,
-            int(total_i), int(total_j)  # Convert to int for cleaner output
-        ))
+                results.append((
+                    samples[i], samples[j],
+                    prop_a_shared, prop_b_shared, jaccard,
+                    int(total_i), int(total_j)  # Convert to int for cleaner output
+                ))
 
-    return results
+            return results
 
-# Example usage
-vcf_filename = "vcf_annotated_gaf.vcf.gz"
-sharing_results = compute_rare_allele_sharing(vcf_filename)
+        # Example usage
+        vcf_filename = "vcf_annotated_gaf.vcf.gz"
+        sharing_results = compute_rare_allele_sharing(vcf_filename)
 
-# Write results to TSV file
-output_filename = "~{cohort_prefix}_rare_allele_sharing_results.tsv"
-with open(output_filename, "w") as f:
-    f.write("Sample_A\tSample_B\tProp_A_Shared\tProp_B_Shared\tJaccard_Index\tTotal_Rare_A\tTotal_Rare_B\n")
-    for result in sharing_results:
-        f.write("\t".join(map(str, result)) + "\n")
+        # Write results to TSV file
+        output_filename = "~{cohort_prefix}_rare_allele_sharing_results.tsv"
+        with open(output_filename, "w") as f:
+            f.write("Sample_A\tSample_B\tProp_A_Shared\tProp_B_Shared\tJaccard_Index\tTotal_Rare_A\tTotal_Rare_B\n")
+            for result in sharing_results:
+                f.write("\t".join(map(str, result)) + "\n")
 
-print(f"Results written to {output_filename}")
+        print(f"Results written to {output_filename}")
         CODE
 
     >>>

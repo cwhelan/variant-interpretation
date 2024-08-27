@@ -69,7 +69,7 @@ workflow Relatedness {
         }
     }
 
-    call mergeVCFs.mergeVCFSamples as mergeVCFs {
+    call mergeVCFs.mergeVCFSamples as mergeSubsetVCFs {
         input:
             vcf_files=subsetVCFs.subset_vcf,
             sv_base_mini_docker=sv_base_mini_docker,
@@ -77,7 +77,15 @@ workflow Relatedness {
             runtime_attr_override=runtime_attr_merge_vcfs
     }
 
-    File merged_vcf_file = mergeVCFs.merged_vcf_file
+    call mergeVCFs.mergeVCFSamples as mergeNonSubsetVCFs {
+        input:
+            vcf_files=subsetVCFs.subset_vcf,
+            sv_base_mini_docker=sv_base_mini_docker,
+            merged_filename=cohort_prefix,
+            runtime_attr_override=runtime_attr_merge_vcfs
+    }
+
+    File merged_vcf_file = mergeSubsetVCFs.merged_vcf_file
 
     call checkRelatedness {
         input:
@@ -95,8 +103,8 @@ workflow Relatedness {
 
     call AnnotateWithGnomadAFs {
         input:
-            vcf=merged_vcf_file,
-            vcf_idx=mergeVCFs.merged_vcf_file_idx,
+            vcf=mergeNonSubsetVCFs.merged_vcf_file,
+            vcf_idx=mergeNonSubsetVCFs.merged_vcf_file_idx,
             gnomad_af_resource=gnomad_af_resource,
             gnomad_af_resource_idx=gnomad_af_resource_idx,
             sv_base_mini_docker=sv_base_mini_docker
@@ -107,8 +115,6 @@ workflow Relatedness {
             vcf=AnnotateWithGnomadAFs.out,
             vcf_idx=AnnotateWithGnomadAFs.out_idx,
             cohort_prefix=cohort_prefix,
-            gnomad_af_resource=gnomad_af_resource,
-            gnomad_af_resource_idx=gnomad_af_resource_idx,
             hail_docker=hail_docker,
             bucket_id=bucket_id,
             genome_build=genome_build,
@@ -322,8 +328,6 @@ task checkRelatednessRareAlleles {
     input {
         File vcf
         File vcf_idx
-        File gnomad_af_resource
-        File gnomad_af_resource_idx
         String cohort_prefix
         String hail_docker
         String bucket_id

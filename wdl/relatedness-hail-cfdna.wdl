@@ -104,7 +104,7 @@ workflow Relatedness {
 
     call checkRelatednessRareAlleles {
         input:
-            vcf_uri=AnnotateWithGnomadAFs.out,
+            vcf=AnnotateWithGnomadAFs.out,
             vcf_idx=AnnotateWithGnomadAFs.out_idx,
             cohort_prefix=cohort_prefix,
             gnomad_af_resource=gnomad_af_resource,

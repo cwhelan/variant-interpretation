@@ -96,6 +96,7 @@ workflow Relatedness {
     call AnnotateWithGnomadAFs {
         input:
             vcf=merged_vcf_file,
+            vcf_idx=mergeVCFs.merged_vcf_idx,
             gnomad_af_resource=gnomad_af_resource,
             gnomad_af_resource_idx=gnomad_af_resource_idx,
             sv_base_mini_docker=sv_base_mini_docker
@@ -104,6 +105,7 @@ workflow Relatedness {
     call checkRelatednessRareAlleles {
         input:
             vcf_uri=AnnotateWithGnomadAFs.out,
+            vcf_idx=AnnotateWithGnomadAFs.out_idx,
             cohort_prefix=cohort_prefix,
             gnomad_af_resource=gnomad_af_resource,
             gnomad_af_resource_idx=gnomad_af_resource_idx,
@@ -218,6 +220,7 @@ task RemoveRawMutectCalls {
 task AnnotateWithGnomadAFs {
     input {
         File vcf
+        File vcf_idx
         File gnomad_af_resource
         File gnomad_af_resource_idx
         String sv_base_mini_docker
@@ -257,6 +260,7 @@ task AnnotateWithGnomadAFs {
 
     output {
         File out = "vcf_annotated_gaf.vcf.gz"
+        File out_idx = "vcf_annotated_gaf.vcf.gz.tbi"
     }
 }
 
@@ -316,7 +320,8 @@ task checkRelatedness {
 
 task checkRelatednessRareAlleles {
     input {
-        File vcf_uri
+        File vcf
+        File vcf_idx
         File gnomad_af_resource
         File gnomad_af_resource_idx
         String cohort_prefix
@@ -326,7 +331,7 @@ task checkRelatednessRareAlleles {
         RuntimeAttr? runtime_attr_override
     }
 
-    Float input_size = size(vcf_uri, "GB")
+    Float input_size = size(vcf, "GB")
     Float base_disk_gb = 10.0
     Float input_disk_scale = 10.0
 
@@ -408,8 +413,7 @@ task checkRelatednessRareAlleles {
 
             return results
 
-        # Example usage
-        vcf_filename = "vcf_annotated_gaf.vcf.gz"
+        vcf_filename = "~{vcf}"
         sharing_results = compute_rare_allele_sharing(vcf_filename)
 
         # Write results to TSV file

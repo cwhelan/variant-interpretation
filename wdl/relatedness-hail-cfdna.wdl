@@ -93,9 +93,17 @@ workflow Relatedness {
         runtime_attr_override=runtime_attr_check_relatedness
     }
 
+    call AnnotateWithGnomadAFs {
+        input:
+            vcf=merged_vcf_file,
+            gnomad_af_resource=gnomad_af_resource,
+            gnomad_af_resource_idx=gnomad_af_resource_idx,
+            sv_base_mini_docker=sv_base_mini_docker
+    }
+
     call checkRelatednessRareAlleles {
         input:
-            vcf_uri=merged_vcf_file,
+            vcf_uri=AnnotateWithGnomadAFs.out,
             cohort_prefix=cohort_prefix,
             gnomad_af_resource=gnomad_af_resource,
             gnomad_af_resource_idx=gnomad_af_resource_idx,
@@ -207,6 +215,51 @@ task RemoveRawMutectCalls {
     }
 }
 
+task AnnotateWithGnomadAFs {
+    input {
+        File vcf
+        File gnomad_af_resource
+        File gnomad_af_resource_idx
+        String sv_base_mini_docker
+    }
+
+    RuntimeAttr runtime_default = object {
+                                      mem_gb: 3,
+                                      disk_gb: 25,
+                                      cpu_cores: 1,
+                                      preemptible_tries: 3,
+                                      max_retries: 1,
+                                      boot_disk_gb: 10
+                                  }
+
+    RuntimeAttr runtime_override = runtime_default
+    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+
+    String prefix = basename(vcf, ".vcf.gz")
+
+    runtime {
+        memory: "~{memory} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: cpu_cores
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: sv_base_mini_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+        set -eou pipefail
+        bcftools annotate -a ~{gnomad_af_resource} -c GAF:=AF_popmax -o vcf_annotated_gaf.vcf.gz ~{vcf}
+        tabix vcf_annotated_gaf.vcf.gz
+
+    >>>
+
+    output {
+        File out = "vcf_annotated_gaf.vcf.gz"
+    }
+}
+
 task checkRelatedness {
     input {
         File vcf_uri
@@ -302,10 +355,6 @@ task checkRelatednessRareAlleles {
 
     command <<<
         set -eou pipefail
-
-        bcftools annotate -a ~{gnomad_af_resource} -c GAF:=AF_popmax -o vcf_annotated_gaf.vcf.gz ~{vcf_uri}
-        tabix vcf_annotated_gaf.vcf.gz
-
         python3 <<CODE
         import numpy as np
         import pysam

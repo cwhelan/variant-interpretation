@@ -387,8 +387,7 @@ task checkRelatednessRareAlleles {
                 if 'GAF' in variant.info:
                     gaf = variant.info['GAF'][0]  # Assuming GAF is a single value
                     if gaf < maf_threshold and gaf > 0:
-                        # This is a rare variant, process it
-                        genotypes = [sum(sample.values()) > 0 for sample in variant.samples.values()]
+                        genotypes = [variant.samples[sample]['GT'] == (0, 1) or variant.samples[sample]['GT'] == (1, 1) for sample in variant.samples]
 
                         for i, has_allele in enumerate(genotypes):
                             if has_allele:

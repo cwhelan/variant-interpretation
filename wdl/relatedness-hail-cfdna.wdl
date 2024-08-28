@@ -79,7 +79,7 @@ workflow Relatedness {
 
     call mergeVCFs.mergeVCFSamples as mergeNonSubsetVCFs {
         input:
-            vcf_files=subsetVCFs.subset_vcf,
+            vcf_files=DedupVcfs.vcfs,
             sv_base_mini_docker=sv_base_mini_docker,
             merged_filename=cohort_prefix,
             runtime_attr_override=runtime_attr_merge_vcfs

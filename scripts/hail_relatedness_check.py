@@ -189,11 +189,7 @@ related_in_ped = related_in_ped.filter(hl.is_missing(related_in_ped.ped_relation
 
 unrelated_in_ped = rel.anti_join(related_in_ped).annotate(ped_relationship='unrelated')
 
-p = 0.05
-only_related = unrelated_in_ped.filter(unrelated_in_ped.relationship!='unrelated')
-downsampled_unrelated = unrelated_in_ped.filter(unrelated_in_ped.relationship=='unrelated').sample(p)
-
-rel_total = related_in_ped.union(only_related).union(downsampled_unrelated)
+rel_total = related_in_ped.union(unrelated_in_ped)
 
 rel_df = rel_total.to_pandas()
 rel_df.to_csv(f"{cohort_prefix}_kinship.tsv.gz", sep='\t', index=False)

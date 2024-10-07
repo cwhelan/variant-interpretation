@@ -79,10 +79,12 @@ task mergeVCFSamples {
             echo "$vcf"_stripped.vcf.gz >> vcfs_sorted_stripped.list
         done
         bcftools merge -m none --force-samples --no-version -Oz --file-list vcfs_sorted_stripped.list --output ~{merged_filename}_merged.vcf.gz
+        tabix ~{merged_filename}_merged.vcf.gz
     >>>
 
     output {
         File merged_vcf_file = "~{merged_filename}_merged.vcf.gz"
+        File merged_vcf_idx = "~{merged_filename}_merged.vcf.gz.tbi"
     }
 }
 

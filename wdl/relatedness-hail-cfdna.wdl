@@ -104,7 +104,7 @@ workflow Relatedness {
     call AnnotateWithGnomadAFs {
         input:
             vcf=mergeNonSubsetVCFs.merged_vcf_file,
-            vcf_idx=mergeNonSubsetVCFs.merged_vcf_file_idx,
+            vcf_idx=mergeNonSubsetVCFs.merged_vcf_idx,
             gnomad_af_resource=gnomad_af_resource,
             gnomad_af_resource_idx=gnomad_af_resource_idx,
             sv_base_mini_docker=sv_base_mini_docker

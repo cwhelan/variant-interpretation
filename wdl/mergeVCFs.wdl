@@ -70,14 +70,19 @@ task mergeVCFSamples {
     command <<<
         set -euo pipefail
         VCFS="~{write_lines(vcf_files)}"
+        echo here
         cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
+        echo here2
         for vcf in $(cat vcfs_sorted.list);
         do
+            echo $vcf
             bcftools annotate -x ^FORMAT/GT,FORMAT/AD,FORMAT/DP,FORMAT/GQ,FORMAT/PL -Ou $vcf | \
                 bcftools norm -m- $vcf -oz -o "$vcf"_stripped.vcf.gz
+            echo annotated
             tabix "$vcf"_stripped.vcf.gz
             echo "$vcf"_stripped.vcf.gz >> vcfs_sorted_stripped.list
         done
+        echo done
         bcftools merge -m none --force-samples --no-version -Oz --file-list vcfs_sorted_stripped.list --output ~{merged_filename}_merged.vcf.gz
         tabix ~{merged_filename}_merged.vcf.gz
     >>>

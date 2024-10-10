@@ -77,7 +77,7 @@ task mergeVCFSamples {
         do
             echo $vcf
             bcftools annotate -x ^FORMAT/GT,FORMAT/AD,FORMAT/DP,FORMAT/GQ,FORMAT/PL -Ou $vcf | \
-                bcftools norm -m- $vcf -oz -o "$vcf"_stripped.vcf.gz
+                bcftools norm -m- -o "$vcf"_stripped.vcf.gz
             echo annotated
             tabix "$vcf"_stripped.vcf.gz
             echo "$vcf"_stripped.vcf.gz >> vcfs_sorted_stripped.list

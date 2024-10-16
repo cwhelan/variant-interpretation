@@ -433,7 +433,7 @@ task checkRelatednessRareAlleles {
 
         print(f"Results written to {output_filename}")
         CODE
-        bgzip ~{cohort_prefix}_rare_allele_sharing_results.tsv
+        gzip ~{cohort_prefix}_rare_allele_sharing_results.tsv
     >>>
 
     output {

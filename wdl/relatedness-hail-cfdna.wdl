@@ -388,6 +388,8 @@ task checkRelatednessRareAlleles {
 
             # Iterate through variants in the VCF
             for variant in vcf:
+                if not 'PASS' in variant.filter.keys():
+                    continue
                 # Check if GAF is present and below threshold
                 if 'GAF' in variant.info:
                     gaf = variant.info['GAF'][0]  # Assuming GAF is a single value
@@ -416,7 +418,7 @@ task checkRelatednessRareAlleles {
                 results.append((
                     samples[i], samples[j],
                     prop_a_shared, prop_b_shared, jaccard,
-                    int(total_i), int(total_j)  # Convert to int for cleaner output
+                    int(total_i), int(total_j), int(shared)  # Convert to int for cleaner output
                 ))
 
             return results
@@ -427,7 +429,7 @@ task checkRelatednessRareAlleles {
         # Write results to TSV file
         output_filename = "~{cohort_prefix}_rare_allele_sharing_results.tsv"
         with open(output_filename, "w") as f:
-            f.write("Sample_A\tSample_B\tProp_A_Shared\tProp_B_Shared\tJaccard_Index\tTotal_Rare_A\tTotal_Rare_B\n")
+            f.write("Sample_A\tSample_B\tProp_A_Shared\tProp_B_Shared\tJaccard_Index\tTotal_Rare_A\tTotal_Rare_B\tTotal_Shared\n")
             for result in sharing_results:
                 f.write("\t".join(map(str, result)) + "\n")
 

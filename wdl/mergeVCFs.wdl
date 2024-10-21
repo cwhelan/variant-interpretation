@@ -83,7 +83,11 @@ task mergeVCFSamples {
             echo "$vcf"_stripped.vcf.gz >> vcfs_sorted_stripped.list
         done
         echo done
-        bcftools merge -m none --force-samples --no-version -Oz --file-list vcfs_sorted_stripped.list --output ~{merged_filename}_merged.vcf.gz
+        bcftools merge -m none --force-samples --no-version -Oz --file-list vcfs_sorted_stripped.list --output ~{merged_filename}_merged_with_dups.vcf.gz
+        # get rid of duplicate samples which will have a number and colon prepended to the sample name
+        bcftools query -l ~{merged_filename}_merged_with_dups.vcf.gz | grep -v ':' > non_dup_samples.list
+        bcftools view -S non_dup_samples.list -o ~{merged_filename}_merged.vcf.gz ~{merged_filename}_merged_with_dups.vcf.gz
+
         tabix ~{merged_filename}_merged.vcf.gz
     >>>
 

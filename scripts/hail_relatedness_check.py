@@ -176,10 +176,17 @@ for fam in ped.family_id.unique():
             ped_rels['family_id'].append(fam)
 
 
+sys.stderr.write(ped_rels)
+sys.stderr.write("\n")
 ped_rels_df = pd.DataFrame(ped_rels, dtype=str)
+sys.stderr.write(ped_rels_df)
+sys.stderr.write("\n")
+
 ped_rels_ht = hl.Table.from_pandas(ped_rels_df)
 
-ped_rels_ht.describe()
+sys.stderr.write(ped_rels_ht.describe())
+sys.stderr.write("\n")
+
 ped_rels_ht.key_by('i','j').describe()
 
 ped_rels_ht_merged = ped_rels_ht.annotate(i=ped_rels_ht.j, j=ped_rels_ht.i).key_by('i', 'j').union(ped_rels_ht.key_by('i','j'))

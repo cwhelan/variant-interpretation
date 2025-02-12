@@ -176,11 +176,9 @@ for fam in ped.family_id.unique():
             ped_rels['family_id'].append(fam)
 
 
-sys.stderr.write(ped_rels)
-sys.stderr.write("\n")
+sys.stderr.write("{}\n".format(ped_rels))
 ped_rels_df = pd.DataFrame(ped_rels, dtype=str)
-sys.stderr.write(ped_rels_df)
-sys.stderr.write("\n")
+sys.stderr.write("{}\n".format(ped_rels_df))
 
 ped_rels_ht = hl.Table.from_pandas(ped_rels_df)
 

@@ -142,7 +142,7 @@ task mergeVCFSamplesChr {
         for vcf in $(cat vcfs_sorted.list);
         do
             echo $vcf
-            bcftools view -r ~{chromosome} -Ou $vcf | \
+            bcftools view -t ~{chromosome} -Ou $vcf | \
                 bcftools annotate -x ^FORMAT/GT,FORMAT/AD,FORMAT/DP,FORMAT/GQ,FORMAT/PL -Ou $vcf | \
                 bcftools norm -m- -o "$vcf"_stripped.vcf.gz
             echo annotated

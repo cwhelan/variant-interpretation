@@ -22,6 +22,7 @@ workflow Relatedness {
         File bed_file
         File gnomad_af_resource
         File gnomad_af_resource_idx
+        Array[String] contigs
         String cohort_prefix
         String relatedness_qc_script
         String plot_relatedness_script
@@ -69,23 +70,45 @@ workflow Relatedness {
         }
     }
 
-    call mergeVCFs.mergeVCFSamples as mergeSubsetVCFs {
+    scatter (i in range(length(contigs))){
+        call mergeVCFs.mergeVCFSamplesChr as mergeSubsetVCFs {
+            input:
+                vcf_files=subsetVCFs.subset_vcf,
+                sv_base_mini_docker=sv_base_mini_docker,
+                chromosome=contigs[i],
+                merged_filename=cohort_prefix,
+                runtime_attr_override=runtime_attr_merge_vcfs
+        }
+
+        call mergeVCFs.mergeVCFSamplesChr as mergeNonSubsetVCFs {
+            input:
+                vcf_files=DedupVcfs.vcfs,
+                sv_base_mini_docker=sv_base_mini_docker,
+                chromosome=contigs[i],
+                merged_filename=cohort_prefix,
+                runtime_attr_override=runtime_attr_merge_vcfs
+        }
+    }
+
+    call mergeVCFs.mergeVCFs as CatSubsetVcfs {
         input:
-            vcf_files=subsetVCFs.subset_vcf,
+            vcf_files=mergeSubsetVCFs.merged_vcf_file,
             sv_base_mini_docker=sv_base_mini_docker,
-            merged_filename=cohort_prefix,
+            cohort_prefix=cohort_prefix,
+            sort_after_merge=sort_after_merge,
             runtime_attr_override=runtime_attr_merge_vcfs
     }
 
-    call mergeVCFs.mergeVCFSamples as mergeNonSubsetVCFs {
+    call mergeVCFs.mergeVCFs as CatNonSubsetVcfs {
         input:
-            vcf_files=DedupVcfs.vcfs,
+            vcf_files=mergeNonSubsetVCFs.merged_vcf_file,
             sv_base_mini_docker=sv_base_mini_docker,
-            merged_filename=cohort_prefix,
+            cohort_prefix=cohort_prefix,
+            sort_after_merge=sort_after_merge,
             runtime_attr_override=runtime_attr_merge_vcfs
     }
 
-    File merged_vcf_file = mergeSubsetVCFs.merged_vcf_file
+    File merged_vcf_file = CatSubsetVcfs.merged_vcf_file
 
     call checkRelatedness {
         input:
@@ -103,8 +126,8 @@ workflow Relatedness {
 
     call AnnotateWithGnomadAFs {
         input:
-            vcf=mergeNonSubsetVCFs.merged_vcf_file,
-            vcf_idx=mergeNonSubsetVCFs.merged_vcf_idx,
+            vcf=CatNonSubsetVcfs.merged_vcf_file,
+            vcf_idx=CatNonSubsetVcfs.merged_vcf_idx,
             gnomad_af_resource=gnomad_af_resource,
             gnomad_af_resource_idx=gnomad_af_resource_idx,
             sv_base_mini_docker=sv_base_mini_docker

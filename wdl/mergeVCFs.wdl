@@ -56,7 +56,7 @@ task mergeVCFSamples {
     RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
     Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
     Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    
+
     runtime {
         memory: "~{memory} GB"
         disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} SSD"
@@ -94,6 +94,73 @@ task mergeVCFSamples {
     output {
         File merged_vcf_file = "~{merged_filename}_merged.vcf.gz"
         File merged_vcf_idx = "~{merged_filename}_merged.vcf.gz.tbi"
+    }
+}
+
+task mergeVCFSamplesChr {
+    input {
+        Array[File] vcf_files
+        String merged_filename
+        String chromosome
+        String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    Float input_size = size(vcf_files, "GB")
+    Float base_disk_gb = 10.0
+    Float input_disk_scale = 5.0
+
+    RuntimeAttr runtime_default = object {
+                                      mem_gb: 4,
+                                      disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+                                      cpu_cores: 1,
+                                      preemptible_tries: 3,
+                                      max_retries: 1,
+                                      boot_disk_gb: 10
+                                  }
+
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+
+    runtime {
+        memory: "~{memory} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} SSD"
+        cpu: cpu_cores
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: sv_base_mini_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+        set -euo pipefail
+        VCFS="~{write_lines(vcf_files)}"
+        echo here
+        cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
+        echo here2
+        for vcf in $(cat vcfs_sorted.list);
+        do
+            echo $vcf
+            bcftools view -r ~{chromosome} -Ou $vcf | \
+                bcftools annotate -x ^FORMAT/GT,FORMAT/AD,FORMAT/DP,FORMAT/GQ,FORMAT/PL -Ou $vcf | \
+                bcftools norm -m- -o "$vcf"_stripped.vcf.gz
+            echo annotated
+            tabix "$vcf"_stripped.vcf.gz
+            echo "$vcf"_stripped.vcf.gz >> vcfs_sorted_stripped.list
+        done
+        echo done
+        bcftools merge -m none --force-samples --no-version -Oz --file-list vcfs_sorted_stripped.list --output ~{merged_filename}_merged_with_dups.vcf.gz
+        # get rid of duplicate samples which will have a number and colon prepended to the sample name
+        bcftools query -l ~{merged_filename}_merged_with_dups.vcf.gz | grep -v ':' > non_dup_samples.list
+        bcftools view -S non_dup_samples.list -o ~{merged_filename}_merged.~{chromosome}.vcf.gz ~{merged_filename}_merged_with_dups.vcf.gz
+
+        tabix ~{merged_filename}_merged.vcf.gz
+    >>>
+
+    output {
+        File merged_vcf_file = "~{merged_filename}_merged.~{chromosome}.vcf.gz"
+        File merged_vcf_idx = "~{merged_filename}_merged.~{chromosome}.vcf.gz.tbi"
     }
 }
 

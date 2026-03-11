@@ -143,7 +143,7 @@ task mergeVCFSamplesChr {
         do
             echo $vcf
             bcftools view -t ~{chromosome} -Ou $vcf | \
-                bcftools annotate -x ^FORMAT/GT,FORMAT/AD,FORMAT/DP,FORMAT/GQ,FORMAT/PL -Ou $vcf | \
+                bcftools annotate -x ^FORMAT/GT,FORMAT/AD,FORMAT/DP,FORMAT/GQ,FORMAT/PL -Ou | \
                 bcftools norm -m- -o "$vcf"_stripped.vcf.gz
             echo annotated
             tabix "$vcf"_stripped.vcf.gz
@@ -226,7 +226,7 @@ task mergeVCFs {
             tabix ~{merged_vcf_name}
         fi
 
-    >>>
+m    >>>
 
     output {
         File merged_vcf_file = if sort_after_merge then sorted_vcf_name else merged_vcf_name

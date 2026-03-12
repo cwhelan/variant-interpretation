@@ -155,7 +155,7 @@ task mergeVCFSamplesChr {
         bcftools query -l ~{merged_filename}_merged_with_dups.vcf.gz | grep -v ':' > non_dup_samples.list
         bcftools view -S non_dup_samples.list -o ~{merged_filename}_merged.~{chromosome}.vcf.gz ~{merged_filename}_merged_with_dups.vcf.gz
 
-        tabix ~{merged_filename}_merged.vcf.gz
+        tabix ~{merged_filename}_merged.~{chromosome}.vcf.gz
     >>>
 
     output {

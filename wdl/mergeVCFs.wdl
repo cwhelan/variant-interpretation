@@ -226,7 +226,7 @@ task mergeVCFs {
             tabix ~{merged_vcf_name}
         fi
 
-m    >>>
+    >>>
 
     output {
         File merged_vcf_file = if sort_after_merge then sorted_vcf_name else merged_vcf_name
